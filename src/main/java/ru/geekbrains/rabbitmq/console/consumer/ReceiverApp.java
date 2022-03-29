@@ -22,31 +22,53 @@ public class ReceiverApp {
 
         String queueName = channel.queueDeclare().getQueue();
 
+         new Thread(() -> {
+            try {
+                readMessage(channel, queueName);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+
+        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            System.out.println(message);
+        };
+
+        channel.basicConsume(queueName, true, deliverCallback, consumerTag -> {
+        });
+    }
+
+    private static void readMessage(Channel channel, String queueName) throws IOException {
         System.out.println("Привет будущий подписщик!");
         System.out.println("Прежде чем получать рассылки, укажи тему на которую ты хочешь подписаться:");
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
             String command;
             String topic = null;
+            while (true) {
+                command = reader.readLine();
 
-            while (!(command = reader.readLine()).isEmpty() || topic == null) {
+                if (command.equals("exit")) break;
+                if (command.equals("help")) {
+                    System.out.println("Доступные команды:");
+                    System.out.println(" set_topic - подписка на рассылку");
+                    System.out.println(" drop_topic - отписка от рассылки");
+                    continue;
+                }
+
                 if (command.startsWith("set_topic") && command.split(" ").length == 2) {
                     topic = command.split(" ")[1];
-                    break;
+                    channel.queueBind(queueName, EXCHANGER_NAME, topic);
+                    System.out.println("Вы подписались на рассылку темы " + topic);
+                } else if (command.startsWith("drop_topic") && command.split(" ").length == 2) {
+                    topic = command.split(" ")[1];
+                    channel.queueUnbind(queueName, EXCHANGER_NAME, topic);
+                    System.out.println("Вы отписались из рассылки темы " + topic);
                 } else {
-                    System.out.println("Укажите тему в формате: 'set_topic тема_подписки'");
+                    System.out.println("Введите команду в формате: 'команда тема_подписки'");
                 }
             }
-            channel.queueBind(queueName, EXCHANGER_NAME, topic);
-            System.out.println("Подписка на тему " + topic);
-
-            DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-                String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-                System.out.println(message);
-            };
-
-            channel.basicConsume(queueName, true, deliverCallback, consumerTag -> {
-            });
         }
     }
 }
